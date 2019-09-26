@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" /> 
+        <link rel="stylesheet" href="css/mytheme.min.css" />
+        <link rel="stylesheet" href="css/jquery.mobile.icons.min.css" />
+        <link rel="stylesheet" href="css/jquery.mobile.structure-1.4.5.min.css" />
+        <script src="js/jquery-1.11.1.min.js"></script>
+        <script src="js/jquery.mobile-1.4.5.min.js"></script>
+        <script type="text/javascript" src="cordova.js"></script>
+        <script type="text/javascript" src="js/index.js"></script>
+        <script type="text/javascript">
+
+            function onLoad() {
+                document.addEventListener("deviceready", onDeviceReady, false);
+            }
+
+            function onDeviceReady() {
+                var onSuccess = function(position) {
+                        latitude = position.coords.latitude;
+                        longitude = position.coords.longitude;
+                    };
+
+                    function onError(error) {
+                        alert('code: '    + error.code    + '\n' +
+                            'message: ' + error.message + '\n');
+                    }
+
+                    navigator.geolocation.getCurrentPosition(onSuccess, onError);
+             }
+
+            var latitude;
+            var longitude;
+           
+            $(document).ready(function () {
+
+                let db;
+
+                window.indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB;
+
+                if (!window.indexedDB) {
+                    alert("Not supported");
+                    exit;
+                }
+
+                //  Create/Open Database
+                let request = window.indexedDB.open("BikeShare", 1);
+
+                request.onupgradeneeded = function (event) {
+                    //  Obtain database object
+                    db = request.result;    // global scope
+                    let obj = db.createObjectStore("BikeShare", {keyPath: "id"});    //  Create ObjectStore
+                    obj.createIndex("I-stationName", "stationName");         
+                    obj.createIndex("I-availableDocks", "availableDocks");  
+                    obj.createIndex("I-totalDocks", "totalDocks");  
+                    obj.createIndex("I-latitude", "latitude");  
+                    obj.createIndex("I-longitude", "longitude");	
+                    obj.createIndex("I-statusValue", "statusValue");
+                    obj.createIndex("I-statusKey", "statusKey");	
+                    obj.createIndex("I-availableBikes", "availableBikes");	
+                    obj.createIndex("I-stAddress1", "stAddress1");	
+                    obj.createIndex("I-stAddress2", "stAddress2");	
+                    obj.createIndex("I-city", "city");	
+                    obj.createIndex("I-postalCode", "postalCode");	
+                    obj.createIndex("I-location", "location");	
+                    obj.createIndex("I-altitude", "altitude");	
+                    obj.createIndex("I-testStation", "testStation");
+                    obj.createIndex("I-lastCommunicationTime", "lastCommunicationTime");	
+                    obj.createIndex("I-landMark", "landMark");		
+                };
+                
+                request.onsuccess = function (event) {
+                    // Load JSON
+                    $.getJSON("bikeshare.json", function (data) {
+                    db = request.result;   
+                    let tran = db.transaction("BikeShare", "readwrite");     
+                    let obj = tran.objectStore("BikeShare");               
+                    
+                    //  Insert objects
+                    start = data.stationBeanList;
+                    for (x=0; x < start.length; x++) {
+                        let req = obj.add({
+                            id: x, 
+                            stationName: start[x].stationName,
+                            availableDocks: start[x].availableDocks, 
+                            totalDocks: start[x].totalDocks, 
+                            latitude: start[x].latitude, 
+                            longitude: start[x].longitude, 
+                            statusValue: start[x].statusValue, 
+                            statusKey: start[x].statusKey, 
+                            availableBikes: start[x].availableBikes,
+                            stAddress1: start[x].stAddress1,
+                            stAddress2: start[x].stAddress2,
+                            city: start[x].city,
+                            postalCode: start[x].postalCode,
+                            location: start[x].location,
+                            altitude: start[x].altitude,
+                            testStation: start[x].testStation,
+                            lastCommunicationTime: start[x].lastCommunicationTime,
+                            landMark: start[x].landMark
+                        });
+                    }});
+
+                    
+                    $.getJSON("http://api.openweathermap.org/data/2.5/weather?lat="+latitude+"&lon="+longitude+"&APPID=133e3ddfa3659892d9954fff8a1df844", function (data2) {
+                    
+                    var temp = data2.main.temp -273.15;
+                    var temp2 = Number(temp).toFixed(1);
+                    $("#displayForecast").html("<b>Temperature: </b>" + temp2 + " C<br>" +
+                                        "<b>Condition:  </b>" + data.weather[0].main + "<br>" +
+                                        "<b>Wind Speed:  </b>" + data.wind.speed + "<br>" +
+                                        "<b>Humidity:  </b>" + data.main.humidity);
+                    });
+                };
+
+                request.onerror = function (event) {
+                    alert("Error");
+                };
+
+                request.onblocked = function (event) {
+                    alert("Blocked");
+                };
+
+
+                // Function for search by group size
+                $("#showSizeBtn").click(function () {
+                    $("#displaySizeSearchResults").html("");
+                    db = request.result;
+                    let key = $("#sizeSearch").val();
+                    let req = db.transaction(["BikeShare"], "readwrite")
+                            .objectStore("BikeShare")
+                            .getAll()
+                            .onsuccess = function (event) {
+                        var cursor = event.target.result;
+                        if (cursor) {
+                            $("#displaySizeSearchResults").append("<table><tr><th width='300'>" + "Intersection" + "</th><th>" + "Available Bikes" + "</th></tr>");
+                            for (var x in cursor) {
+                                if (cursor[x].availableBikes >= key) { 
+                                    $("#displaySizeSearchResults").append("<tr><td width='300'>" + cursor[x].stationName + "</td><td>" + cursor[x].availableBikes + "</td></tr>");
+                                } 
+                            }
+                            $("#displaySizeSearchResults").append("</table>");
+                        } 
+
+                    };
+                    req.onerror = function (e) {
+                        alert("Error: " + e);
+                    };
+                }); // End search by group size
+
+
+                // Function for search by for docks by distance
+                $("#showDockBtn").click(function () {
+                    // Get current location
+                    navigator.geolocation.getCurrentPosition(onSuccess, onError);
+                    var onSuccess = function(position) {
+                        latitude = position.coords.latitude;
+                        longitude = position.coords.longitude;
+                    };
+
+                    function onError(error) {
+                        alert('code: '    + error.code    + '\n' +
+                            'message: ' + error.message + '\n');
+                    }
+
+                    $("#displayDockSearchResults").html("");
+                    db = request.result;
+                    let distKey = $("#dockSearch").val();
+                    let req = db.transaction(["BikeShare"], "readwrite")
+                            .objectStore("BikeShare")
+                            .getAll()
+                            .onsuccess = function (event) {
+                        var cursor = event.target.result;
+                        var cursor2 = event.target.result;
+                        if (cursor) {
+                            $("#displayDockSearchResults").append("<table><tr><th width='300'>" + "Intersection" + "</th><th>" + "Distance in km" + "</th></tr>");
+                            for (var x in cursor) {
+                                dist = Haversine(latitude, longitude, cursor[x].latitude, cursor[x].longitude);
+                                var dist2 = Number(dist).toFixed(2);
+                                if (dist <= distKey && cursor[x].availableDocks >= 1) { 
+                                    $("#displayDockSearchResults").append("<tr><td width='300'>" + cursor[x].stationName + "</td><td>" + dist2 + "</td></tr>");
+                                } else {
+                                    $("#displayDockSearchResults").html("No matches found!");
+                                }
+                            }
+                            $("#displayDockSearchResults").append("</table>");
+                        } 
+                    };
+                    req.onerror = function (e) {
+                        alert("Error: " + e);
+                    };
+                }); // End search for docks by distance
+                
+                
+                // Function for search by for bikes by distance
+                $("#showBikeBtn").click(function () {
+                    // Get current location
+                    navigator.geolocation.getCurrentPosition(onSuccess, onError);
+                    var onSuccess = function(position) {
+                        latitude = position.coords.latitude;
+                        longitude = position.coords.longitude;
+                    };
+
+                    function onError(error) {
+                        alert('code: '    + error.code    + '\n' +
+                            'message: ' + error.message + '\n');
+                    }
+
+                    $("#displayBikeSearchResults").html("");
+                    db = request.result;
+                    let distKey = $("#bikeSearch").val();
+                    let req = db.transaction(["BikeShare"], "readwrite")
+                            .objectStore("BikeShare")
+                            .getAll()
+                            .onsuccess = function (event) {
+                        var cursor = event.target.result;
+                        if (cursor) {
+                            $("#displayBikeSearchResults").append("<table><tr><th width='300'>" + "Intersection" + "</th><th>" + "Distance in km" + "</th></tr>");
+                            for (var x in cursor) {
+                                dist = Haversine(latitude, longitude, cursor[x].latitude, cursor[x].longitude);
+                                var dist2 = Number(dist).toFixed(2);
+                                if (dist <= distKey && cursor[x].availableBikes >= 1) { 
+                                    $("#displayBikeSearchResults").append("<tr><td width='300'>" + cursor[x].stationName + "</td><td>" + dist2 + "</td></tr>");
+                                } else {
+                                    $("#displayBikeSearchResults").html("No matches found!");
+                                }
+                            }
+                        } 
+                    };
+                    req.onerror = function (e) {
+                        alert("Error: " + e);
+                    };
+                }); // End search for bikes by distance
+
+
+
+                // Function for weather forecast
+                $("#showForecastBtn").click(function () {
+                    // Get current location
+                    var onSuccess = function(position) {
+                        latitude = position.coords.latitude;
+                        longitude = position.coords.longitude;
+                    };
+
+                    function onError(error) {
+                        alert('code: '    + error.code    + '\n' +
+                            'message: ' + error.message + '\n');
+                    }
+
+                    navigator.geolocation.getCurrentPosition(onSuccess, onError);
+
+                    $.getJSON("http://api.openweathermap.org/data/2.5/weather?lat="+latitude+"&lon="+longitude+"&APPID=133e3ddfa3659892d9954fff8a1df844", function (data) {
+                    
+                    var temp = data.main.temp -273.15;
+                    var temp2 = Number(temp).toFixed(2);
+                    $("#displayForecast").html("<b>Temperature: </b>" + temp2 + " C<br>" +
+                                        "<b>Condition:  </b>" + data.weather[0].main + "<br>" +
+                                        "<b>Wind Speed:  </b>" + data.wind.speed + "<br>" +
+                                        "<b>Humidity:  </b>" + data.main.humidity);
+                    });
+                }); // End weather
+
+
+                // Function for checking device info
+                $("#deviceBtn").click(function () {	
+                    navigator.notification.alert('Have a great day!',  alertDismissed, 'Hello', 'OK');			
+                    navigator.vibrate(1000);
+                    navigator.notification.beep(1);
+                    checkConnection();
+                    $("#device").html("<b>Device Model: </b>" +device.model+"<br><b>Device Platform: </b>" +device.platform+ "<b><br>Device UUID: </b>" +device.uuid+"<b><br>Device Manufacturer: </b>"+device.manufacturer);
+                });
+
+                function checkConnection() {
+                    var networkState = navigator.connection.type;
+                
+                    var states = {};
+                    states[Connection.UNKNOWN]  = 'Unknown connection';
+                    states[Connection.ETHERNET] = 'Ethernet connection';
+                    states[Connection.WIFI]     = 'WiFi connection';
+                    states[Connection.CELL_2G]  = 'Cell 2G connection';
+                    states[Connection.CELL_3G]  = 'Cell 3G connection';
+                    states[Connection.CELL_4G]  = 'Cell 4G connection';
+                    states[Connection.CELL]     = 'Cell generic connection';
+                    states[Connection.NONE]     = 'No network connection';
+                
+                    $("#network").html("<b>Connection type: </b>" + states[networkState]);
+                } // End function for device info
+
+                function alertDismissed() {}
+
+                // Get distance between two lat/long using the Haversine function
+                //"Virtues of the Haversine" by Rober Sinnott 1984
+                function Haversine(lat1, lng1, lat2, lng2) {
+                    var R = 6372.8; // Earth Radius in Kilometers
+                    var dLat = Deg2Rad(lat2-lat1);
+                    var dLng = Deg2Rad(lng2-lng1);
+
+                    var a = Math.sin(dLat/2) * Math.sin(dLat/2) + 
+                        Math.cos(Deg2Rad(lat1)) * Math.cos(Deg2Rad(lat2)) *
+                        Math.sin(dLng/2) * Math.sin(dLng/2);
+
+                    var c = Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    var d = R*c;
+
+                    // Return distance in Kilometers
+                    return d;
+                }
+
+                // Convert Degrees to Radians
+                function Deg2Rad(deg) { return deg * Math.PI/180; }
+
+            });     //document.ready   
+        </script>
+	</head>
+<body onload="onLoad()">  
+		
+<!-- Home page -->
+<div data-role="page" id="home" data-theme="a">
+	<header data-role="header">
+		<h1>Toronto BikeShare</h1>
+	</header>
+
+	<section class="ui-content" role="main">
+		<ul id="selectMenu" data-role="listview" data-inset="true">
+			<li li-id='1'>
+				<a href='#groupSize' class='ui-btn'>
+					Search by Group Size
+				</a>
+			</li>
+			<li li-id='2'> 
+				<a href='#docksDistance' class='ui-btn'>
+					Search for Docks by Distance
+				</a> 
+			</li>
+			<li li-id='3'> 
+				<a href='#bikesDistance' class='ui-btn'> 
+					Search for Bikes by Distance
+				</a> 
+			</li>
+			<li li-id='4'> 
+				<a href='#weatherForecast' class='ui-btn'> 
+					Weather Forecast for Current Location
+				</a> 
+			</li>
+			<li li-id='5'> 
+				<a href='#devicePage' class='ui-btn'> 
+					Check your Device
+				</a> 
+			</li>
+		</ul>		
+
+	</section>
+	
+	<footer data-role="footer">
+          <div align="center"><h3><a href="#home" class="ui-btn">HOME</a></h3></div>
+	</footer>
+</div>
+<!-- end of home page -->
+
+<!-- Start of search by group size page -->
+<div data-role="page" id="groupSize" data-theme="a">
+	<header data-role="header">
+		<h1>Toronto BikeShare</h1>
+		<h2>Group Size</h2>
+    </header>
+    
+    <section class="ui-content" role="main">
+        <form id="sizeSearchForm" method="post" onsubmit="return false">
+            <label for="sizeSearchText">Enter Group Size: </label><input name="sizeSearchText" id="sizeSearch" type="text"><br>
+            <button class="ui-btn" id="showSizeBtn">Click to Display</button>
+        </form>
+        <br>
+        <p id="displaySizeSearchResults"></p>
+	</section>
+
+	<footer data-role="footer">
+          <div align="center"><h3><a href="#home" class="ui-btn">HOME</a></h3></div>
+	</footer>
+</div>
+
+<!-- Start of search for docks page -->
+<div data-role="page" id="docksDistance" data-theme="a">
+	<header data-role="header">
+		<h1>Toronto BikeShare</h1>
+		<h2>Docks by Distance</h2>
+	</header>
+
+    <section class="ui-content" role="main">
+        <form id="dockSearchForm" method="post" onsubmit="return false">
+            <label for="dockSearchText">Enter distance in KM: </label><input name="dockSearchText" id="dockSearch" type="text"><br>
+            <button class="ui-btn" id="showDockBtn">Click to Display</button>
+        </form>
+        <br>
+        <p id="displayDockSearchResults"></p>
+    </section>
+	
+	<footer data-role="footer">
+          <div align="center"><h3><a href="#home" class="ui-btn">HOME</a></h3></div>
+	</footer>
+</div>
+
+<!-- Start of search for bikes page -->
+<div data-role="page" id="bikesDistance" data-theme="a">
+	<header data-role="header">
+		<h1>Toronto BikeShare</h1>
+		<h2>Bikes by Distance</h2>
+	</header>
+
+    <section class="ui-content" role="main">
+        <form id="bikeSearchForm" method="post" onsubmit="return false">
+            <label for="bikeSearchText">Enter distance in KM: </label><input name="bikeSearchText" id="bikeSearch" type="text"><br>
+            <button class="ui-btn" id="showBikeBtn">Click to Display</button>
+        </form>
+        <br>
+        <p id="displayBikeSearchResults"></p>
+    </section>
+	
+	<footer data-role="footer">
+          <div align="center"><h3><a href="#home" class="ui-btn">HOME</a></h3></div>
+	</footer>
+</div>
+
+<!-- Start of weather page -->
+<div data-role="page" id="weatherForecast" data-theme="a">
+	<header data-role="header">
+		<h1>Toronto BikeShare</h1>
+		<h2>Weather Forecast</h2>
+	</header>
+
+	<section class="ui-content" role="main">
+		<form id="weatherForecastForm" method="post" onsubmit="return false">
+            <button class="ui-btn" id="showForecastBtn">Click to Display</button>
+        </form>
+        <br>
+        <p id="displayForecast"></p>
+	</section>
+	
+	<footer data-role="footer">
+          <div align="center"><h3><a href="#home" class="ui-btn">HOME</a></h3></div>
+	</footer>
+</div>
+
+<!-- Start of device page -->
+<div data-role="page" id="devicePage" data-theme="a">
+	<header data-role="header">
+		<h1>BikeShare Company</h1>
+		<h2>Device Details</h2>
+    </header>
+
+    <section class="ui-content" role="main">
+        <button class="ui-btn" id="deviceBtn">Load Details</button>
+        <div class="app">
+                <h1>Device</h1>    
+                <p id="device"></p>
+                <h1>Network</h1>    
+                <p id="network"></p>
+        </div>
+	</section>
+	
+	<footer data-role="footer">
+          <div align="center"><h3><a href="#home" class="ui-btn">HOME</a></h3></div>
+	</footer>
+</div>
+
+</body>
+</html>

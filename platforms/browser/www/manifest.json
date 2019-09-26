@@ -1,0 +1,11 @@
+{
+  "background_color": "#FFF",
+  "display": "standalone",
+  "name": "BikeShare",
+  "short_name": "BikeShare",
+  "version": "io.cordova.bikeshare",
+  "description": "A simple Cordova app for Toronto BikeShare",
+  "author": "Jessica Sjostrom",
+  "icons": [],
+  "start_url": "index.html"
+}
