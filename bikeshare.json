@@ -449,7 +449,7 @@
          "longitude":-79.374,
          "statusValue":"In Service",
          "statusKey":1,
-         "availableBikes":6,
+         "availableBikes":7,
          "stAddress1":null,
          "stAddress2":null,
          "city":null,
